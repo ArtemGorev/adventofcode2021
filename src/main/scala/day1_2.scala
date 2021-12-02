@@ -2,10 +2,13 @@ import scala.io.Source
 
 object day1_2 extends App {
   val filename                    = "inputs/day1_1.txt"
-  val listOfStrings: List[String] = Source.fromFile(filename).getLines().toList
+  val source                      = Source.fromFile(filename)
+  val listOfStrings: List[String] = source.getLines().toList
   val listOfInts: List[Int]       = listOfStrings.map(_.toInt)
   val listOfSums                  = listOfInts.sliding(3).map(_.sum).toList
   val count                       = getCountOfIncreases(listOfSums.head, listOfSums)
+
+  source.close()
   print(s"count => $count");
 
   private def getCountOfIncreases(first: Int, ints: List[Int]) =
