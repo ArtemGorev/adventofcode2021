@@ -11,7 +11,39 @@ object day9_1 extends App {
     .toList
     .map(_.split("").toList.map(_.toInt))
 
-  var result = 0
+//  var result1 = 0
+//
+//  for (r <- lines.indices) {
+//    for (c <- lines.head.indices) {
+//      val e: Int              = lines(r)(c)
+//      val adjacent: List[Int] = getAdjacent(lines, r, c)
+//
+//      if (adjacent.forall(x => e < x)) {
+//        result1 += e + 1
+//      }
+//    }
+//  }
+//
+//  println(s"part one => $result1")
+
+  def walkThrough(m: List[List[Int]], row: Int, column: Int): List[(Int, Int)] = {
+    val currentValue              = getValue(m, row, column)
+    val nearest: List[(Int, Int)] = getNearestIndexes(row, column)
+    val next: List[(Int, Int)] = nearest
+      .filter {
+        case (r, c) =>
+          val value = getValue(m, r, c)
+          value != 9 && value - currentValue == 1
+      }
+
+    if (next.isEmpty) {
+      List((row, column))
+    } else {
+      next.flatMap(x => walkThrough(m, x._1, x._2)) :+ (row, column)
+    }
+  }
+
+  var result2 = List[(Int, Int)]()
 
   for (r <- lines.indices) {
     for (c <- lines.head.indices) {
@@ -19,12 +51,42 @@ object day9_1 extends App {
       val adjacent: List[Int] = getAdjacent(lines, r, c)
 
       if (adjacent.forall(x => e < x)) {
-        result += e + 1
+        result2 = result2 :+ (r, c)
       }
     }
   }
 
-  println(s"part one => $result")
+  val q = result2
+    .map(x => walkThrough(lines, x._1, x._2).distinct.map(x => getValue(lines, x._1, x._2)).length)
+    .sorted
+    .takeRight(3)
+    .product
+
+  println(q)
+
+  def getValue(m: List[List[Int]], row: Int, column: Int): Int = {
+    val rowsCount    = m.length - 1
+    val columnsCount = m.head.length - 1
+
+    if (row < 0 || row > rowsCount) {
+      9
+    } else if (column < 0 || column > columnsCount) {
+      9
+    } else {
+      m(row)(column)
+    }
+  }
+
+  def getNearestIndexes(row: Int, column: Int): List[(Int, Int)] = {
+    val lst = List[(Int, Int)](
+      (0, -1),
+      (-1, 0),
+      (0, 1),
+      (1, 0)
+    )
+
+    lst.map(x => (x._1 + row, x._2 + column))
+  }
 
   def getAdjacent(m: List[List[Int]], row: Int, column: Int): List[Int] = {
     val rowsCount    = m.length - 1
