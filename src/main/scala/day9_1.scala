@@ -56,74 +56,8 @@ object day9_1 extends App {
     lst.map(x => (x._1 + row, x._2 + column))
   }
 
-  def getAdjacent(m: List[List[Int]], row: Int, column: Int): List[Int] = {
-    val rowsCount    = m.length - 1
-    val columnsCount = m.head.length - 1
-
-    // up edge
-    if (row == 0) {
-      // up left corner
-      if (column == 0) {
-        List(
-          m(row + 1)(column),
-          m(row)(column + 1)
-        )
-        // up right corner
-      } else if (column == columnsCount) {
-        List(
-          m(row + 1)(column),
-          m(row)(column - 1)
-        )
-      } else {
-        List(
-          m(row + 1)(column),
-          m(row)(column + 1),
-          m(row)(column - 1)
-        )
-      }
-      // bottom edge
-    } else if (row == rowsCount) {
-      if (column == 0) {
-        List(
-          m(row - 1)(column),
-          m(row)(column + 1)
-        )
-        // up right corner
-      } else if (column == columnsCount) {
-        List(
-          m(row - 1)(column),
-          m(row)(column - 1)
-        )
-      } else {
-        List(
-          m(row - 1)(column),
-          m(row)(column + 1),
-          m(row)(column - 1)
-        )
-      }
-      // left edge
-    } else if (column == 0) {
-      List(
-        m(row - 1)(column),
-        m(row + 1)(column),
-        m(row)(column + 1)
-      )
-      // right edge
-    } else if (column == columnsCount) {
-      List(
-        m(row - 1)(column),
-        m(row + 1)(column),
-        m(row)(column - 1)
-      )
-    } else {
-      List(
-        m(row - 1)(column),
-        m(row + 1)(column),
-        m(row)(column - 1),
-        m(row)(column + 1)
-      )
-    }
-  }
+  def getAdjacent(m: List[List[Int]], row: Int, column: Int): List[Int] =
+    getNearestIndexes(row, column).map(p => getValue(m, p._1, p._2))
 
   def getBasin(m: List[List[Int]], row: Int, column: Int): List[Point] = {
     val currentValue = getValue(m, row, column)
@@ -139,5 +73,4 @@ object day9_1 extends App {
       next.flatMap(x => getBasin(m, x._1, x._2)).distinct :+ (row, column)
     }
   }
-
 }
