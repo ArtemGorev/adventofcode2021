@@ -1,5 +1,3 @@
-import day8_1.source
-
 import scala.io.Source
 
 object day9_1 extends App {
@@ -10,59 +8,27 @@ object day9_1 extends App {
     .getLines()
     .toList
     .map(_.split("").toList.map(_.toInt))
+  val minimums = getMinimums(lines)
 
-//  var result1 = 0
-//
-//  for (r <- lines.indices) {
-//    for (c <- lines.head.indices) {
-//      val e: Int              = lines(r)(c)
-//      val adjacent: List[Int] = getAdjacent(lines, r, c)
-//
-//      if (adjacent.forall(x => e < x)) {
-//        result1 += e + 1
-//      }
-//    }
-//  }
-//
-//  println(s"part one => $result1")
-
-  def walkThrough(m: List[List[Int]], row: Int, column: Int): List[(Int, Int)] = {
-    val currentValue              = getValue(m, row, column)
-    val nearest: List[(Int, Int)] = getNearestIndexes(row, column)
-    val next: List[(Int, Int)] = nearest
-      .filter {
-        case (r, c) =>
-          val value = getValue(m, r, c)
-          value != 9 && value - currentValue == 1
-      }
-
-    if (next.isEmpty) {
-      List((row, column))
-    } else {
-      next.flatMap(x => walkThrough(m, x._1, x._2)) :+ (row, column)
-    }
-  }
-
-  var result2 = List[(Int, Int)]()
-
-  for (r <- lines.indices) {
-    for (c <- lines.head.indices) {
-      val e: Int              = lines(r)(c)
-      val adjacent: List[Int] = getAdjacent(lines, r, c)
-
-      if (adjacent.forall(x => e < x)) {
-        result2 = result2 :+ (r, c)
-      }
-    }
-  }
-
-  val q = result2
-    .map(x => walkThrough(lines, x._1, x._2).distinct.map(x => getValue(lines, x._1, x._2)).length)
+  val part1 = getMinimums(lines).map(x => getValue(lines, x._1, x._2) + 1).sum
+  val part2 = getMinimums(lines)
+    .map(x => getBasin(lines, x._1, x._2))
+    .filter(_.nonEmpty)
+    .map(_.length)
     .sorted
     .takeRight(3)
     .product
 
-  println(q)
+  println(s"part1 => $part1")
+  println(s"part2 => $part2")
+  println(s"===============================================================")
+
+  def getMinimums(m: List[List[Int]]) =
+    for {
+      x <- m.indices
+      y <- m.head.indices
+      if getAdjacent(m, x, y).forall(n => getValue(m, x, y) < n)
+    } yield (x, y)
 
   def getValue(m: List[List[Int]], row: Int, column: Int): Int = {
     val rowsCount    = m.length - 1
@@ -77,8 +43,10 @@ object day9_1 extends App {
     }
   }
 
-  def getNearestIndexes(row: Int, column: Int): List[(Int, Int)] = {
-    val lst = List[(Int, Int)](
+  type Point = (Int, Int)
+
+  def getNearestIndexes(row: Int, column: Int): List[Point] = {
+    val lst = List[Point](
       (0, -1),
       (-1, 0),
       (0, 1),
@@ -154,6 +122,21 @@ object day9_1 extends App {
         m(row)(column - 1),
         m(row)(column + 1)
       )
+    }
+  }
+
+  def getBasin(m: List[List[Int]], row: Int, column: Int): List[Point] = {
+    val currentValue = getValue(m, row, column)
+    val nearest      = getNearestIndexes(row, column)
+
+    val next: List[Point] = nearest
+      .filter { case (r, c) => getValue(m, r, c) != 9 }
+      .filter { case (r, c) => getValue(m, r, c) > currentValue }
+
+    if (next.isEmpty) {
+      List((row, column))
+    } else {
+      next.flatMap(x => getBasin(m, x._1, x._2)).distinct :+ (row, column)
     }
   }
 
