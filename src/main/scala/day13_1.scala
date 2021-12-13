@@ -1,3 +1,4 @@
+import scala.annotation.tailrec
 import scala.io.Source
 
 object day13_1 extends App {
@@ -72,13 +73,28 @@ object day13_1 extends App {
       )
       .toList
 
-  val m1      = fold(matrix, folds.head)
-  val result1 = m1.flatten.count(x => x == 1)
-  println(s"result1 => $result1")
+//  val m1      = fold(matrix, folds.head)
+//  val result1 = m1.flatten.count(x => x == 1)
+  //  val m2 = fold(m1, folds.last)
+  //  printMatrix(m2)
+//  println(s"result1 => $result1")
 
-//  val m2 = fold(m1, folds.last)
-//  printMatrix(m2)
+  @tailrec
+  def foldAll(m: Matrix, folds: List[Fold]): Matrix = {
+    if (folds.isEmpty)
+      m
+    else {
+      val next = fold(m, folds.head)
+      foldAll(next, folds.tail)
+    }
+  }
+
+  val result2 = foldAll(matrix, folds)
+  println("part two =>")
+  printPartTwo(result2)
 
   def printMatrix(m: Matrix): Unit = m.foreach(println)
+
+  def printPartTwo(m: Matrix): Unit = m.map(_.map(i => if (i == 1) "#" else " ").mkString).foreach(println)
 
 }
