@@ -73,11 +73,11 @@ object day13_1 extends App {
       )
       .toList
 
-//  val m1      = fold(matrix, folds.head)
-//  val result1 = m1.flatten.count(x => x == 1)
-  //  val m2 = fold(m1, folds.last)
-  //  printMatrix(m2)
-//  println(s"result1 => $result1")
+  val m1      = fold(matrix, folds.head)
+  val result1 = m1.flatten.count(x => x == 1)
+  val m2      = fold(m1, folds.last)
+  printMatrix(m2)
+  println(s"result1 => $result1")
 
   @tailrec
   def foldAll(m: Matrix, folds: List[Fold]): Matrix = {
