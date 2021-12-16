@@ -1,5 +1,3 @@
-import day16.packet
-
 import java.lang.Integer.parseInt
 import scala.io.Source
 
@@ -29,26 +27,23 @@ object day16 extends App {
     val typeId: Int
     val length: Int
   }
-  case class LiteralPacket(version: Int, typeId: Int, value: Int, length: Int) extends PacketInfo
-  case class OperatorPacket(version: Int, typeId: Int, lengthType: Int, subPackets: List[PacketInfo], length: Int)
-      extends PacketInfo
+
 
   val filename = "inputs/day16_0.txt"
-  val source   = Source.fromFile(filename)
-  val packet   = source.toList.map(hexadecimalCodes(_)).mkString("")
+  val source = Source.fromFile(filename).getLines().filterNot(_.isEmpty).mkString("")
+  val packet = source.toList.map(hexadecimalCodes(_)).mkString("")
+  val packetInfo = processPacket(packet)
+
+  def getTypeId(packet: String, index: Int) = parseInt(packet.slice(index + 3, index + 6), 2)
 
   def getPacketVersion(packet: String, index: Int) = parseInt(packet.slice(index, index + 3), 2)
-  def getTypeId(packet: String, index: Int)        = parseInt(packet.slice(index + 3, index + 6), 2)
 
-  def getLengthType(packet: String, index: Int)         = parseInt(packet.slice(index + 6, index + 7), 2)
-  def getLengthOfSubPackets(packet: String, index: Int) = parseInt(packet.slice(index + 7, index + 22), 2)
-  def getNumberOfSubPackets(packet: String, index: Int) = parseInt(packet.slice(index + 7, index + 18), 2)
+  def getLengthType(packet: String, index: Int) = parseInt(packet.slice(index + 6, index + 7), 2)
 
   def parseLiteralValue(packet: String, start: Int) = {
-    println("parseLiteralValue")
-    var index      = start + 6
+    var index = start + 6
     var isContinue = true
-    var result     = ""
+    var result = ""
 
     do {
       val x = packet.slice(index, index + 5)
@@ -57,26 +52,29 @@ object day16 extends App {
       index = index + 5
     } while (isContinue)
 
-    (parseInt(result, 2), index)
+    (BigInt(result, 2), index)
   }
 
+  def getLengthOfSubPackets(packet: String, index: Int) = parseInt(packet.slice(index + 7, index + 22), 2)
+
+  def getNumberOfSubPackets(packet: String, index: Int) = parseInt(packet.slice(index + 7, index + 18), 2)
+
   def processPacket(packet: String, index: Int = 0): PacketInfo = {
-    println(index)
-    println("processPacket")
     val version = getPacketVersion(packet, index)
-    val typeId  = getTypeId(packet, index)
+    val typeId = getTypeId(packet, index)
     if (typeId == 4) {
       val x = parseLiteralValue(packet, index)
-      LiteralPacket(version, typeId, x._1, x._2 - index)
-
+      val packet1 = LiteralPacket(version, typeId, x._1, x._2 - index)
+      println(packet1)
+      packet1
     } else {
-      println("process OPERATOR")
+
       val lengthType = getLengthType(packet, index)
       if (lengthType == 0) {
         val lengthOfSubPackets = getLengthOfSubPackets(packet, index)
-        val offset             = index + 7 + 15
-        var packets            = List[PacketInfo]()
-        var internalIndex      = offset
+        val offset = index + 7 + 15
+        var packets = List[PacketInfo]()
+        var internalIndex = offset
 
         do {
           val nextPacket = processPacket(packet, internalIndex)
@@ -84,7 +82,9 @@ object day16 extends App {
           packets = packets :+ nextPacket
         } while (internalIndex < offset + lengthOfSubPackets)
 
-        OperatorPacket(version, typeId, lengthType, packets, packet.length)
+        val packet1 = OperatorPacket(version, typeId, lengthType, packets, lengthOfSubPackets + 7 + 15)
+        println(packet1)
+        packet1
       } else {
         var numberOfSubPackets = getNumberOfSubPackets(packet, index)
         val offset             = index + 7 + 11
@@ -99,10 +99,13 @@ object day16 extends App {
           numberOfSubPackets -= 1
         } while (numberOfSubPackets != 0)
 
-        OperatorPacket(version, typeId, lengthType, packets, packet.length)
+        val packet1 = OperatorPacket(version, typeId, lengthType, packets, packets.map(_.length).sum + 7 + 11)
+        println(packet1)
+        packet1
       }
     }
   }
+
 
   def calcVersion(packetInfo: PacketInfo): Int = packetInfo match {
     case LiteralPacket(v, _, _, _) => v
@@ -110,16 +113,26 @@ object day16 extends App {
       v + packets.map(calcVersion).sum
   }
 
-//  11101110000000001101010000001100100000100011000001100000
+  def gt(packets: List[PacketInfo]): Int = if (calc(packets.head) >  calc(packets.tail.head)) 1 else 0
+  def lt(packets: List[PacketInfo]): Int = if (calc(packets.head) <  calc(packets.tail.head)) 1 else 0
+  def eq(packets: List[PacketInfo]): Int = if (calc(packets.head) == calc(packets.tail.head)) 1 else 0
 
-//  11101110000000001101010000001100100000100011000001100000
-//                                 0100000100011000001100000
+  def calc(packetInfo: PacketInfo): BigInt = packetInfo match {
+    case LiteralPacket(_, _, value, _) => value
+    case OperatorPacket(_, 0, _, packets, _) => packets.map(calc).sum
+    case OperatorPacket(_, 1, _, packets, _) => packets.map(calc).product
+    case OperatorPacket(_, 2, _, packets, _) => packets.map(calc).min
+    case OperatorPacket(_, 3, _, packets, _) => packets.map(calc).max
+    case OperatorPacket(_, 5, _, packets, _) => gt(packets)
+    case OperatorPacket(_, 6, _, packets, _) => lt(packets)
+    case OperatorPacket(_, 7, _, packets, _) => eq(packets)
+  }
 
-//  "1101000101001010010001001000000000"
-//  "110" - version
-//     "100" - typeId = 4
-//        "01010" - A
+  case class LiteralPacket(version: Int, typeId: Int, value: BigInt, length: Int) extends PacketInfo
 
-  println(calcVersion(processPacket(packet)))
+  case class OperatorPacket(version: Int, typeId: Int, lengthType: Int, subPackets: List[PacketInfo], length: Int)
+    extends PacketInfo
+  println(s"part1 => ${calcVersion(packetInfo)}")
+  println(s"part2 => ${calc(packetInfo)}")
 
 }
