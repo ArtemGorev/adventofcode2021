@@ -1,11 +1,14 @@
+import scala.annotation.tailrec
 import scala.collection.mutable
+import scala.io.Source
 
 object day18 extends App {
 
+  val filename = "inputs/day18_0.txt"
+  val entities = Source.fromFile(filename).getLines().map(x => addParents(syn(lex(x)), None)).toList
+
   sealed trait Entity
-
-
-  case class Pair(var x: Entity, var y: Entity) extends Entity
+  case class Pair(var x: Entity, var y: Entity, parent: Option[Entity] = None) extends Entity
 
   object Pair {
     def apply(x: Int, y: Int): Pair = {
@@ -14,8 +17,8 @@ object day18 extends App {
   }
 
   def syn(lexems: Seq[Lexem]): Entity = {
-    val brackets = mutable.Stack[Lexem]()
-    val entities = mutable.Stack[Entity]()
+    val brackets       = mutable.Stack[Lexem]()
+    val entities       = mutable.Stack[Entity]()
     var result: Entity = null
 
     for (elem <- lexems) {
@@ -25,7 +28,7 @@ object day18 extends App {
         }
         case RightBracket => {
           val right = entities.pop()
-          val left = entities.pop()
+          val left  = entities.pop()
           entities.push(Pair(left, right))
         }
         case Digit(number) =>
@@ -64,102 +67,151 @@ object day18 extends App {
   //  [[1,2],3]
   sealed trait Lexem
 
-  case class Number(var value: Int) extends Entity
-  case class Digit(number: Int) extends Lexem
-  case object LeftBracket extends Lexem
-  case object RightBracket extends Lexem
-
+  case class Number(var value: Int, parent: Option[Entity] = None) extends Entity
+  case class Digit(number: Int)                                    extends Lexem
+  case object LeftBracket                                          extends Lexem
+  case object RightBracket                                         extends Lexem
 
   val test1: Entity = syn(lex("[[1,2],3]"))
   val test2: Entity = syn(lex("[[1,9],[8,5]]"))
   val test3: Entity = syn(lex("[[[[1,2],[3,4]],[[5,6],[7,8]]],9]"))
 
-  println(test1 == Pair(Pair(Number(1), Number(2)), Number(3)))
-  println(test2 == Pair(Pair(Number(1), Number(9)), Pair(Number(8), Number(5))))
-  println(test3 == Pair(Pair(Pair(Pair(Number(1), Number(2)), Pair(Number(3), Number(4))), Pair(Pair(Number(5), Number(6)), Pair(Number(7), Number(8)))), Number(9)))
+  def isNumbersOnly(e: Entity) = e match {
+    case Pair(Number(_, _), Number(_, _), _) => true
+    case _                                   => false
+  }
 
-    def isNumbersOnly(e: Entity) = e match {
-      case Pair(Number(_), Number(_)) => true
-      case _                          => false
+  // [[[[0,7],4],[[7,8],[0,[6,7]]]],[1,1]]
+//  val example = addParents(syn(lex("[[[[0,7],4],[[7,8],[0,[6,7]]]],[1,1]]")), None)
+//  explode(example)
+//  println(printEntity(example))
+
+  def addParents(e: Entity, parent: Option[Entity]): Entity = e match {
+    case n @ Number(_, _) => n.copy(parent = parent)
+    case Pair(l, r, _) => {
+      val p = Pair(null, null, parent)
+      p.x = addParents(l, Some(p))
+      p.y = addParents(r, Some(p))
+      p
+    }
+  }
+
+  def process(e1: Entity, e2: Entity) = {
+    println(printEntity(e1))
+    println(printEntity(e2))
+    var result: Entity = Pair(e1, e2)
+    var before         = ""
+    var after          = ""
+    var before1        = ""
+
+    do {
+      before1 = printEntity(result)
+      do {
+        before = printEntity(result)
+        explode(result)
+        after = printEntity(result)
+      } while (before != after)
+
+      do {
+        before = printEntity(result)
+        result = split(result)
+        after = printEntity(result)
+      } while (before != after)
+
+    } while (before1 != after)
+
+    explode(result)
+    result
+  }
+
+  println(printEntity(process(entities(0), entities(1))))
+
+//  val e = addParents(syn(lex("[[[[0,7],4],[[7,8],[0,[6,7]]]],[1,1]]")), None)
+//  explode(e)
+//
+//  println(printEntity(e))
+
+  case class State(var leftTarget: Option[Pair], var rightTarget: Option[Pair])
+
+  @tailrec
+  def addLeftValue(pair: Pair, value: Int): Unit = {
+    pair match {
+      case Pair(n @ Number(_, _), _, _)  => n.value += value
+      case Pair(p @ Pair(_, _, _), _, _) => addLeftValue(p, value)
+    }
+  }
+
+  @tailrec
+  def addRightValue(pair: Pair, value: Int): Unit = {
+    pair match {
+      case Pair(_, n @ Number(_, _), _)  => n.value += value
+      case Pair(_, p @ Pair(_, _, _), _) => addRightValue(p, value)
+    }
+  }
+
+  @tailrec
+  def changeRight(start: Entity, e: Entity, value: Int): Unit =
+    e match {
+      case Pair(_, n @ Number(_, _), _)                           => n.value += value
+      case Pair(_, p @ Pair(_, _, _), _) if p != start            => addLeftValue(p, value)
+      case Pair(_, p @ Pair(_, _, _), Some(parent)) if p == start => changeRight(e, parent, value)
+      case _                                                      => ()
     }
 
-    // [[[[[9,8],1],2],3],4] => [[[[0,9],2],3],4]
-    val example1 = Pair(Pair(Pair(Pair(Pair(9, 8), Number(1)), Number(2)), Number(3)), Number(4))
+  @tailrec
+  def changeLeft(start: Entity, e: Entity, value: Int): Unit =
+    e match {
+      case Pair(n @ Number(_, _), _, _)                           => n.value += value
+      case Pair(p @ Pair(_, _, _), _, _) if p != start            => addLeftValue(p, value)
+      case Pair(p @ Pair(_, _, _), _, Some(parent)) if p == start => changeLeft(e, parent, value)
+      case _                                                      => ()
+    }
 
-    // [[[[0,7],4],[7,[[8,4],9]]],[1,1]] => [[[[0,7],4],[15,[0,13]]],[1,1]]
-    val example2 = Pair(Pair(Pair(Pair(0, 7), Number(4)), Pair(Number(7), Pair(Pair(8, 4), Number(9)))), Pair(1, 1))
-
-    // [[6,[5,[4,[3,2]]]],1]
-    val example3 = Pair(Pair(Number(6), Pair(Number(5), Pair(Number(4), Pair(3, 2)))), Number(1))
-
-    val e1 = explode(example2)
-    val e2 = split(e1)
-
-    println(e1)
-    println(e2)
-    println(split(e2))
-
-    case class State(var leftTarget: Option[Pair], var rightTarget: Option[Pair])
-
-    def explode(e: Entity) = {
-
-      val state = State(None, None)
-
-      def walk(e: Entity, step: Int = 1): Unit = {
-        e match {
-          case p @ Pair(Pair(_, _), Number(_)) => state.rightTarget = Some(p)
-          case p @ Pair(Number(_), Pair(_, _)) => state.leftTarget = Some(p)
-          case _                               => ()
-        }
-
-        e match {
-          case Pair(Number(x), Number(y)) if step == 5 => {
-
-            state.leftTarget.foreach {
-              case p @ Pair(Number(_), c @ Pair(_, _)) =>
-                if (e == c) p.y = Number(0)
-                p.x.asInstanceOf[Number].value += x
-              case _ => ()
-            }
-
-            state.rightTarget.foreach {
-              case p @ Pair(c @ Pair(_, _), Number(_)) =>
-                if (e == c) p.x = Number(0)
-                p.y.asInstanceOf[Number].value += y
-              case _ => ()
-            }
+  def explode(e: Entity) = {
+    def walk(e: Entity, step: Int = 1): Unit = {
+      e match {
+        case Pair(Number(x, _), Number(y, _), Some(parent)) if step == 5 =>
+          changeLeft(e, parent, x)
+          changeRight(e, parent, y)
+          parent match {
+            case p @ Pair(x, _, _) if x == e => p.x = Number(0)
+            case p @ Pair(_, y, _) if y == e => p.y = Number(0)
           }
-
-          case Pair(Number(_), Number(_)) => ()
-          case Pair(l, Number(_))         => walk(l, step + 1)
-          case Pair(Number(_), r)         => walk(r, step + 1)
-          case Pair(l, r) =>
-            walk(l, step + 1)
-            walk(r, step + 1)
-        }
+        case Pair(Number(_, _), Number(_, _), _) => ()
+        case Pair(l, Number(_, _), _)            => walk(l, step + 1)
+        case Pair(Number(_, _), r, _)            => walk(r, step + 1)
+        case Pair(l, r, _) =>
+          walk(l, step + 1)
+          walk(r, step + 1)
       }
-
-      walk(e)
-      e
     }
 
-    def split(e: Entity) = {
+    walk(e)
+    e
+  }
 
-      def walk(e: Entity): Entity = e match {
-        case Pair(Number(x), e) if x >= 10  => Pair(getPair(x), e)
-        case Pair(e, Number(y)) if y >= 10  => Pair(e, getPair(y))
-        case p @ Pair(Number(_), Number(_)) => p
-        case Pair(l, n @ Number(_))         => Pair(walk(l), n)
-        case Pair(n @ Number(_), r)         => Pair(n, walk(r))
-        case Pair(l, r)                     => Pair(walk(l), walk(r))
-      }
+  def printEntity(e: Entity): String = e match {
+    case Pair(x, y, _) => s"[${printEntity(x)},${printEntity(y)}]"
+    case Number(x, _)  => s"$x"
+  }
 
-      walk(e)
+  def split(e: Entity) = {
+
+    def walk(e: Entity): Entity = e match {
+      case Pair(Number(x, _), e, _) if x >= 10     => Pair(getPair(x), e)
+      case Pair(e, Number(y, _), _) if y >= 10     => Pair(e, getPair(y))
+      case p @ Pair(Number(_, _), Number(_, _), _) => p
+      case Pair(l, n @ Number(_, _), _)            => Pair(walk(l), n)
+      case Pair(n @ Number(_, _), r, _)            => Pair(n, walk(r))
+      case Pair(l, r, _)                           => Pair(walk(l), walk(r))
     }
 
-    def getPair(x: Int) = {
-      val half = x / 2
-      Pair(Number(half), Number(x - half))
-    }
+    walk(e)
+  }
+
+  def getPair(x: Int) = {
+    val half = x / 2
+    Pair(Number(half), Number(x - half))
+  }
 
 }
