@@ -2,35 +2,21 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.io.Source
 
-object day18 extends App {
-
-  val filename = "inputs/day18_0.txt"
-  val entities = Source.fromFile(filename).getLines().map(x => addParents(syn(lex(x)), None)).toList
-
-  sealed trait Entity
-  case class Pair(var x: Entity, var y: Entity, parent: Option[Entity] = None) extends Entity
-
-  object Pair {
-    def apply(x: Int, y: Int): Pair = {
-      Pair(Number(x), Number(y))
-    }
-  }
+trait day18_fn {
+  def parse(x: String): Entity = syn(lex(x))
 
   def syn(lexems: Seq[Lexem]): Entity = {
-    val brackets       = mutable.Stack[Lexem]()
-    val entities       = mutable.Stack[Entity]()
-    var result: Entity = null
+    val brackets = mutable.Stack[Lexem]()
+    val entities = mutable.Stack[Entity]()
 
     for (elem <- lexems) {
       elem match {
-        case LeftBracket => {
+        case LeftBracket =>
           brackets.push(elem)
-        }
-        case RightBracket => {
+        case RightBracket =>
           val right = entities.pop()
-          val left  = entities.pop()
+          val left = entities.pop()
           entities.push(Pair(left, right))
-        }
         case Digit(number) =>
           entities.push(Number(number))
       }
@@ -39,9 +25,23 @@ object day18 extends App {
     entities.pop()
   }
 
+  def explode(entity: Entity, depth: Int): Option[(Option[Int], Entity, Option[Int])] = entity match {
+    case Number(_) =>
+      None
+    case Pair(Number(left), Number(right)) if depth >= 5 =>
+      Some((Some(left), Number(0), Some(right)))
+    case Pair(left, right) =>
+      explode(left, depth + 1).map { case (leftAdd, left, rightAdd) =>
+        (leftAdd, Pair(left, rightAdd.map(right.addLeft).getOrElse(right)), None)
+      } orElse explode(right, depth + 1).map { case (leftAdd, right, rightAdd) =>
+        (None, Pair(leftAdd.map(left.addRight).getOrElse(left), right), rightAdd)
+      }
+  }
+
+
   def lex(s: String): Seq[Lexem] = {
     var tmp = ""
-    var res = List[Lexem]();
+    var res = List[Lexem]()
 
     for (i <- 0 until s.length) {
       val currentSymbol = s(i)
@@ -67,151 +67,86 @@ object day18 extends App {
   //  [[1,2],3]
   sealed trait Lexem
 
-  case class Number(var value: Int, parent: Option[Entity] = None) extends Entity
-  case class Digit(number: Int)                                    extends Lexem
-  case object LeftBracket                                          extends Lexem
-  case object RightBracket                                         extends Lexem
+  def explode(number: Entity): Option[Entity] = explode(number, 1).map(_._2)
 
-  val test1: Entity = syn(lex("[[1,2],3]"))
-  val test2: Entity = syn(lex("[[1,9],[8,5]]"))
-  val test3: Entity = syn(lex("[[[[1,2],[3,4]],[[5,6],[7,8]]],9]"))
-
-  def isNumbersOnly(e: Entity) = e match {
-    case Pair(Number(_, _), Number(_, _), _) => true
-    case _                                   => false
+  def split(number: Entity): Option[Entity] = number match {
+    case Number(value) if value >= 10 =>
+      val halfValue = value / 2
+      Some(Pair(Number(halfValue), Number(value - halfValue)))
+    case Number(_) =>
+      None
+    case Pair(left, right) =>
+      split(left).map(Pair(_, right)) orElse split(right).map(Pair(left, _))
   }
 
-  // [[[[0,7],4],[[7,8],[0,[6,7]]]],[1,1]]
-//  val example = addParents(syn(lex("[[[[0,7],4],[[7,8],[0,[6,7]]]],[1,1]]")), None)
-//  explode(example)
-//  println(printEntity(example))
-
-  def addParents(e: Entity, parent: Option[Entity]): Entity = e match {
-    case n @ Number(_, _) => n.copy(parent = parent)
-    case Pair(l, r, _) => {
-      val p = Pair(null, null, parent)
-      p.x = addParents(l, Some(p))
-      p.y = addParents(r, Some(p))
-      p
-    }
+  def present(e: Entity): String = e match {
+    case Pair(x, y) => s"[${present(x)},${present(y)}]"
+    case Number(x) => s"$x"
   }
 
-  def process(e1: Entity, e2: Entity) = {
-    println(printEntity(e1))
-    println(printEntity(e2))
-    var result: Entity = Pair(e1, e2)
-    var before         = ""
-    var after          = ""
-    var before1        = ""
+  def addEntitiesMagnitude(entities: Seq[Entity]): Int = addEntities(entities).magnitude
 
-    do {
-      before1 = printEntity(result)
-      do {
-        before = printEntity(result)
-        explode(result)
-        after = printEntity(result)
-      } while (before != after)
+  def addEntities(entities: Seq[Entity]): Entity = entities.reduce(_ + _)
 
-      do {
-        before = printEntity(result)
-        result = split(result)
-        after = printEntity(result)
-      } while (before != after)
-
-    } while (before1 != after)
-
-    explode(result)
-    result
-  }
-
-  println(printEntity(process(entities(0), entities(1))))
-
-//  val e = addParents(syn(lex("[[[[0,7],4],[[7,8],[0,[6,7]]]],[1,1]]")), None)
-//  explode(e)
-//
-//  println(printEntity(e))
-
-  case class State(var leftTarget: Option[Pair], var rightTarget: Option[Pair])
-
-  @tailrec
-  def addLeftValue(pair: Pair, value: Int): Unit = {
-    pair match {
-      case Pair(n @ Number(_, _), _, _)  => n.value += value
-      case Pair(p @ Pair(_, _, _), _, _) => addLeftValue(p, value)
-    }
+  def largestTwoMagnitude(entities: Seq[Entity]): Int = {
+    (for {
+      left <- entities.iterator
+      right <- entities.iterator
+    } yield (left + right).magnitude).max
   }
 
   @tailrec
-  def addRightValue(pair: Pair, value: Int): Unit = {
-    pair match {
-      case Pair(_, n @ Number(_, _), _)  => n.value += value
-      case Pair(_, p @ Pair(_, _, _), _) => addRightValue(p, value)
+  private def reduce(entity: Entity): Entity = {
+    explode(entity) match {
+      case Some(entity) => reduce(entity)
+      case None =>
+        split(entity) match {
+          case Some(entity) => reduce(entity)
+          case None => entity
+        }
     }
   }
 
-  @tailrec
-  def changeRight(start: Entity, e: Entity, value: Int): Unit =
-    e match {
-      case Pair(_, n @ Number(_, _), _)                           => n.value += value
-      case Pair(_, p @ Pair(_, _, _), _) if p != start            => addLeftValue(p, value)
-      case Pair(_, p @ Pair(_, _, _), Some(parent)) if p == start => changeRight(e, parent, value)
-      case _                                                      => ()
-    }
+  sealed trait Entity {
+    def +(that: Entity): Entity = reduce(Pair(this, that))
 
-  @tailrec
-  def changeLeft(start: Entity, e: Entity, value: Int): Unit =
-    e match {
-      case Pair(n @ Number(_, _), _, _)                           => n.value += value
-      case Pair(p @ Pair(_, _, _), _, _) if p != start            => addLeftValue(p, value)
-      case Pair(p @ Pair(_, _, _), _, Some(parent)) if p == start => changeLeft(e, parent, value)
-      case _                                                      => ()
-    }
+    def addLeft(addValue: Int): Entity
 
-  def explode(e: Entity) = {
-    def walk(e: Entity, step: Int = 1): Unit = {
-      e match {
-        case Pair(Number(x, _), Number(y, _), Some(parent)) if step == 5 =>
-          changeLeft(e, parent, x)
-          changeRight(e, parent, y)
-          parent match {
-            case p @ Pair(x, _, _) if x == e => p.x = Number(0)
-            case p @ Pair(_, y, _) if y == e => p.y = Number(0)
-          }
-        case Pair(Number(_, _), Number(_, _), _) => ()
-        case Pair(l, Number(_, _), _)            => walk(l, step + 1)
-        case Pair(Number(_, _), r, _)            => walk(r, step + 1)
-        case Pair(l, r, _) =>
-          walk(l, step + 1)
-          walk(r, step + 1)
-      }
-    }
+    def addRight(addValue: Int): Entity
 
-    walk(e)
-    e
+    def magnitude: Int
   }
 
-  def printEntity(e: Entity): String = e match {
-    case Pair(x, y, _) => s"[${printEntity(x)},${printEntity(y)}]"
-    case Number(x, _)  => s"$x"
+  case class Pair(left: Entity, right: Entity) extends Entity {
+    override def addLeft(addValue: Int): Entity = Pair(left.addLeft(addValue), right)
+
+    override def addRight(addValue: Int): Entity = Pair(left, right.addRight(addValue))
+
+    override def magnitude: Int = 3 * left.magnitude + 2 * right.magnitude
   }
 
-  def split(e: Entity) = {
+  case class Number(var value: Int) extends Entity {
+    override def addLeft(addValue: Int): Number = Number(value + addValue)
 
-    def walk(e: Entity): Entity = e match {
-      case Pair(Number(x, _), e, _) if x >= 10     => Pair(getPair(x), e)
-      case Pair(e, Number(y, _), _) if y >= 10     => Pair(e, getPair(y))
-      case p @ Pair(Number(_, _), Number(_, _), _) => p
-      case Pair(l, n @ Number(_, _), _)            => Pair(walk(l), n)
-      case Pair(n @ Number(_, _), r, _)            => Pair(n, walk(r))
-      case Pair(l, r, _)                           => Pair(walk(l), walk(r))
-    }
+    override def addRight(addValue: Int): Number = Number(value + addValue)
 
-    walk(e)
+    override def magnitude: Int = value
   }
 
-  def getPair(x: Int) = {
-    val half = x / 2
-    Pair(Number(half), Number(x - half))
-  }
+  case class Digit(number: Int) extends Lexem
 
+  case object LeftBracket extends Lexem
+
+  case object RightBracket extends Lexem
+
+
+}
+
+object day18 extends App with day18_fn {
+
+  val filename = "inputs/day18_1.txt"
+  val entities = Source.fromFile(filename).getLines().map(parse).toSeq
+
+  println(s"part1 => ${addEntitiesMagnitude(entities)}")
+  println(s"part2 => ${largestTwoMagnitude(entities)}")
 }
